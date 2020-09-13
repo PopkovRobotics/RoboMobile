@@ -1,0 +1,62 @@
+//#include "Object.hpp"
+
+// Функции класса Object
+// Констуктор класса
+template<typename Type>
+Object<Type>::Object() {
+    // Инициализируем параметры класса
+    this->use = false;
+    this->lock = PTHREAD_MUTEX_INITIALIZER;      
+}
+/*
+ * Функция обновляет параметр obj.
+ * newObj - параметр типа Type, новое значения для параметра obj.
+ */
+template<typename Type>
+void Object<Type>::write(Type newObj) {
+    // Используем mutex для защиты от одновременного использования
+    pthread_mutex_lock(&(lock));
+    // Обновляем параметр класса 
+    obj = newObj; 
+    // Устаналиваем флаг, который определяет инициализирован ли объект     
+    use = true;                
+	pthread_mutex_unlock(&(lock));
+}
+// Функция возвращает параметр obj
+template<typename Type>
+Type Object<Type>::get() {
+    // Структура, в которую записывается копия параметра obj 
+    Type objReturn;                     
+    // Используем mutex для защиты от одновременного использования
+    pthread_mutex_lock(&(lock));
+    // Записываем параметр obj в копию
+    objReturn = obj;                   
+    pthread_mutex_unlock(&(lock));
+    // Возвращаем копию параметра
+    return objReturn;
+}
+/*
+ * Функция ждёт обновление параметра obj.
+ * objNow - параметр типа Type, текущий объект
+ */
+template<typename Type>
+Type Object<Type>::waitNew(Type objNow) {
+    Type objReturn,         // Структура, в которую записывается копия данныx
+        objOld = objNow;    // Структура, которая данные до их изменения
+    timer.start();
+    while(true) {
+        // Используем mutex для защиты от одновременного использования
+        pthread_mutex_lock(&(lock));
+        objReturn = obj;
+        pthread_mutex_unlock(&(lock));
+        // Если данные не изменились, то ждём 1 миллисекунду, в противном случае выходим из цикла
+        if(objReturn == objOld) {
+            timer.stop();
+            if(timer.millis() >= 200) break;
+            usleep(1000);
+        }
+        else if(use) break;
+    }
+    // Возвращаем копию данных
+    return objReturn;
+}

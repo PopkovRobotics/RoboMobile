@@ -1,5 +1,4 @@
 #include "RecognitionLine.hpp"
-//#include <opencv2/opencv.hpp>
 
 // Функции
 /*
@@ -137,7 +136,6 @@ void* RecognitionLineFnc(void* ptr) {
         // Получаем изображение с камеры
 	    frame = system.frame.waitNew(frame);
         if(frame.empty()) continue;
-        //cv::Mat opencv_img(cv::Size(640, 480), CV_8UC3, frame.data());
 
         // Обнуляем переменные
 		// Устаналиваем центр, к которому стремиться преблизиться модель
@@ -151,7 +149,7 @@ void* RecognitionLineFnc(void* ptr) {
 
 		if(rescan_line) RecognitionLine(frame, main_line, scan_row);
 
-		for(int k = 0; k <= 30; k+=5) {
+		for(int k = 0; k <= 60; k+=5) {
         	RecognitionLine(frame, 					// Изображение, на котором введётся распознавание чёрной линии
 							lines, 					// Структура, в которую будет записываться информация о чёрной линии
 							SCAN_ROW - k);			// Номер строки на изображение, на которой введётся распознавание чёрной линии
@@ -169,7 +167,6 @@ void* RecognitionLineFnc(void* ptr) {
 			if(road_type == CrossRoad) {
 				scan_row = 420;
 			}else if(!direction) rescan_line = false;
-			printf("Row 420 cross road\n");
 		}else if(road_type != Unknown && (engine.distance - fork_start) > road_distance) {
 			// Размер перекрёстка в см.
 			road_distance = 0;
@@ -179,8 +176,6 @@ void* RecognitionLineFnc(void* ptr) {
 			fork_start = 0;
 
 			sign_handle = none_s;
-			
-			printf("End cross road\n");
 		}
 
 		// Если перед машинкой находиться пересечение двух линией
@@ -206,10 +201,9 @@ void* RecognitionLineFnc(void* ptr) {
 			sign_handle = (Sign)sign.sign;
 		}
 
-//		printf("Old Width: %d Width: %d\n", main_line.old_width, main_line.width);
 		if(main_line.old_width != 0 && main_line.width != 0) {
 			// Пересечение двух линий на центральном переркёстке
-			if(main_line.width > 220 && (main_line.width - main_line.old_width) > 120.0) {
+			if(main_line.width > 220) {
 				// Номер строки на изображение, на котором введётся распознавание чёрной линии
 				scan_row = 440;
 				// Устаналиваем значение для флага, определяющего наличие пересечений двух линий 
@@ -219,9 +213,8 @@ void* RecognitionLineFnc(void* ptr) {
 				continue;
 			}
 			// Центральный перекрёсток
-			else if(main_line.width > 150 && (main_line.width - main_line.old_width) > 70.0 &&
-					road_type == Unknown) {
-				printf("Cross road\n");
+			else if(main_line.width > 150 && road_type == Unknown) {
+                INFO("Crossroad detected.");
 				// Номер строки на изображение, на котором введётся распознавание чёрной линии
 				scan_row = 420;
 				// Тип дороги
@@ -235,16 +228,15 @@ void* RecognitionLineFnc(void* ptr) {
 				continue;
 			}
 			// Развилка
-			else if(main_line.width > 70 /*&& (main_line.width - main_line.old_width) > 15.0*/ &&
-					road_type == Unknown) {
-				printf("Fork\n");
+			else if(main_line.width > 70 && road_type == Unknown) {
+                INFO("Fork detected.");
 				// Тип дороги
 				road_type = Fork;
 				// Размер перекрёстка в см.
 				road_distance = FORK_SIZE;
 				// Направление движения на перекрёстке
 				direction = (sign_handle == left_s ? false : true);
-				printf("Sign fork type: %d\n", (int)sign_handle);
+            
 				rescan_line = false;
 
 				fork_start = engine.distance;
@@ -273,7 +265,6 @@ void* RecognitionLineFnc(void* ptr) {
 			}
 			// Если двигаемся по перекрёстку налево
 			else{
-				//printf("Serach left center\n");
 				main_line.set_point = 280;
 				for(int i = main_line.center; i >= 3; i-=3) {
 					white_points = 0;
@@ -284,19 +275,14 @@ void* RecognitionLineFnc(void* ptr) {
                     if(white_points > 2) {
 						main_line.center = i + 1;
 						main_line.old_center = main_line.center;
-//						printf("Left center: %d\n", main_line.center);
 						break;
 					}
                 }
 			}
 		}
-
-        //cv::line(opencv_img, cv::Point(main_line.center, 480), cv::Point(main_line.center, 430), cv::Scalar(255), 3);
-		//cv::line(opencv_img, cv::Point(main_line.set_point, 480), cv::Point(main_line.set_point, 430), cv::Scalar(255, 255), 3);
+		
         // Записываем информацию о положении главной линии (по которой двигаемся)
         system.line.write(main_line);
-        //cv::imshow("frame", opencv_img);
-        //cv::waitKey(0);
 	}
 	INFO("Recognition line thread was stoping.");
 	return NULL;

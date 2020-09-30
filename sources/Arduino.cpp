@@ -1,4 +1,5 @@
 #include "Arduino.hpp"
+#include <iostream>
 
 // Функции класса ArduinoCtrl
 /*
@@ -12,46 +13,26 @@ ArduinoCtrl::ArduinoCtrl(System& system) {
 	char arduino_port[60];
 	system.getArduinoPort(arduino_port);
 	// Открываем соединение с Arduino
-	arduino_fd = open(arduino_port, O_RDWR | O_NOCTTY | O_NDELAY);
+	arduino_fd = open(arduino_port, O_RDWR | O_NOCTTY/* | O_NDELAY*/ | O_NONBLOCK);
 	if (arduino_fd < 0) {
         ERROR("Can't open serial port.");
 		connection = false;
 		return;
 	}
 
-//	printf("CLEANNNNNNNNNNNNN\n");
-
-        //tcflush(arduino_fd, TCIOFLUSH);
-        //tcflush(arduino_fd, TCIFLUSH);
-
-//	printf("fffffffffffffffffffffffff\n");
-
 	usleep(1000000);
-
-//	printf("GGGGGGGGGGGGGGGGGGGGGGG\n");
 
 	// Задаём параметры для "общения" с Arduino
 	struct termios options;                     
 	tcgetattr(arduino_fd, &options);	
 	// Скорость отправки/чтения данных (115200 бод)							
 	cfsetispeed(&options, B115200);
-	cfsetospeed(&options, B115200);
-	/*
-	options.c_cflag &= ~PARENB;              
-	options.c_cflag &= ~CSTOPB;    	// 1 стоп бит    
-	// Режим: 8 бит         
-	options.c_cflag &= ~CSIZE;              
-	options.c_cflag |= CS8;                 
-	options.c_cflag |= (CLOCAL | CREAD);
-	*/
 	options.c_cflag &= ~PARENB;
 	options.c_cflag &= ~CSTOPB;
 	options.c_cflag &= ~CSIZE;
 	options.c_cflag |= CS8;
 	options.c_cflag &= ~CRTSCTS;
 	options.c_cflag |= CREAD | CLOCAL;
-//	options.c_cflag &= ~(IXON | IXOFF | IXANY);
-//	options.c_cflag &= ~(ICANON | ECHO | ECHOE | ISIG);
 	options.c_cflag &= ~OPOST;
 
 	options.c_lflag = 0;
@@ -84,53 +65,51 @@ void ArduinoCtrl::SendCommand(const char* message, size_t size) {
 	ioctl(arduino_fd, TCSBRK, 1);
 	return;
 }
-/*
- * Функция получает информацию с Arduino и возвращает 
- * тип информации.
- * data - универсальная ссылка на информацию, содержащиеся в полученном сообщение.
- */
-ArduinoData ArduinoCtrl::Feedback(double& data) {
-	ArduinoData type_info = NoneA;
-
+// Функция получает информацию с Arduino и возвращает ее.
+ArduinoData ArduinoCtrl::Feedback() {
+	ArduinoData arduino_data;
 	char char_status;
-	int bytes = read(arduino_fd, &char_status, 1);
-//	printf("Char input: %c\n", char_status);
-	if(bytes > 0) {
-		switch(char_status) {
-			// Получаем пройденное расстояние с Arduino
-			case 'F':
-			{
-				// Пример сообщения о дитсанции, которое Arduino отправляет:
-     			// F10E, F - начальный символ для того, чтобы понять какие данные пришли,
-     			// 10 - пройденная дистанция в см., E - закрывающий символ для окончания чтения дистанции.
+    while(true) {
+        char_status = 0;
+        int bytes = read(arduino_fd, &char_status, 1);
+        
+        if(bytes > 0) {
+            switch(char_status) {
+                // Получаем пройденное расстояние с Arduino
+                case 'F':
+                {
+                    // Пример сообщения о дитсанции, которое Arduino отправляет:
+                    // F10E, F - начальный символ для того, чтобы понять какие данные пришли,
+                    // 10 - пройденная дистанция в см., E - закрывающий символ для окончания чтения дистанции.
 
-				char buffer[1023];
-				int i = 0;
-    			bool end_read = false;
-    			for(; !end_read; i++){
-        			while(read(arduino_fd, &char_status, 1) != 1);
-//				printf("Char status: %c\n", char_status);	
-				// Если пришёл символ, закрывающий чтение дистанции, то выходим из цикла
-        			if(char_status == 'E') end_read = true;
-        			else buffer[i] = char_status;
-    			} 
-				buffer[i + 1] = '\0';
-
-				data = std::atoi(buffer);
-				type_info = Distance;
-				break;
-			}
-			// Получаем информацию о том, что батарея разряжена
-			case 'B':
-			{
-				bytes = read(arduino_fd, &char_status, 1);
-				if(bytes > 0 && char_status == 'E') type_info = BattaryLOW;
-				break;
-			}
-		}
-	}
-
-	return type_info;
+                    char buffer[1023];
+                    int i = 0;
+                    bool end_read = false;
+                    for(; !end_read; i++){
+                        bytes = read(arduino_fd, &char_status, 1);
+                        		
+                        // Если пришёл символ, закрывающий чтение дистанции, то выходим из цикла
+                        if(bytes > 0 && char_status == 'E') end_read = true;
+                        else if(bytes > 0) buffer[i] = char_status;
+                        else if (bytes <= 0) end_read = true;
+                    }
+                    
+                    buffer[i + 1] = '\0';
+                    double distance = std::atof(buffer);
+                    if(distance > arduino_data.distance) arduino_data.distance = distance;
+                    break;
+                }
+                // Получаем информацию о том, что батарея разряжена
+                case 'B':
+                {
+                    bytes = read(arduino_fd, &char_status, 1);
+                    if(bytes > 0 && char_status == 'E') arduino_data.charge_bat = false;
+                    break;
+                }
+            }
+        }else break;
+    }
+    return arduino_data;
 }
 // Функция для очищения буфера общения с Arduino
 void ArduinoCtrl::Clean() {
@@ -162,8 +141,6 @@ void* ArduinoFnc(void* ptr) {
 	System &system = *((System *)ptr);
 	// Создаём экземпляр класса для "общения" с Arduino 
 	ArduinoCtrl controller(system);
-	//
-	Timer timer_audio;
     // Структур, которая хранит информацию о модели (скорость, угол поворота передних колёс и т.п.)
 	Engine engine;
     // Массив, который хранит отправляемое сообщение на Arduino
@@ -174,10 +151,6 @@ void* ArduinoFnc(void* ptr) {
 		return NULL;
 	}
     INFO("Arduino is attached.");
-	// Очищаем буфер общения с Arduino
-	//controller.Clean();
-
-	timer_audio.start();
 
     // Код выполняется в цикле, пока не появится сигнал завершения программы.
     // То есть, пока функция is_end() возвращает false, то код выполняется, в противном случае,
@@ -193,36 +166,17 @@ void* ArduinoFnc(void* ptr) {
                                     	// поварачиваются направо, а если больше 90, то колёса поворачиваются налево)
 				engine.direction, 		// Направление  движения (true - вперёд, false - назад)
 				engine.speed); 			// Скорость модели в см/c (минимальная скорость 30см/c, а максимальная 60см/c)
+
 		// Отправляем команду на Arduino
 		controller.SendCommand(message, strlen(message));
 
 		// Получаем информацию с Arduino
-		double data;
-		ArduinoData type_data = controller.Feedback(data);
+		ArduinoData arduino_data = controller.Feedback();
 
-		switch(type_data) {
-			// Пройденное расстояние в см
-			case Distance:
-			{
-				engine.distance = data;
-				printf("Distance arduino.cpp %f\n", engine.distance);
-				break;
-			}
-			// Информация о том, что батарея разряжена
-			case BattaryLOW:
-			{
-				timer_audio.stop();
-				if(timer_audio.millis() >= 500) {
-					system.play_audio("../audio/stop.wav");
-					timer_audio.start();
-				}
-				break;
-			}
-			default:
-				break;
-		}
-
-		// Обновляем дистанцию в структуре
+		if(arduino_data.distance > 0.0)
+            engine.distance = arduino_data.distance;
+		
+		// Записываем пройденное расстояние в глобальную структуру
         system.engine.write(engine);
 		// Задержка для отправки/приёма данных на/c Arduino в микросекундах
 		usleep(10000);

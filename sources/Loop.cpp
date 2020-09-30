@@ -8,6 +8,7 @@ void* LoopFnc(void* ptr) {
     INFO("LoopFnc thread was starting.");
     System &system = *((System *)ptr);
     Timer tr_timer;                                         // Таймер красного сигнала светофора
+    bool start = true;
     bool tr_timer_started = false,                          // Флаг, определяющий запущен ли таймер для красного сигнала светофора.
         hold = false;                                       // Флаг, определяющий начинать ли удерживать скорость
     // Индекс действия в векторе holding_step, которое сейчас выполняется
@@ -30,18 +31,13 @@ void* LoopFnc(void* ptr) {
             engine.angle = (uint8_t)((float)((float)90.0 + result));
             // Ограничиваем угол поворота передних колёс
             pid.constrain(engine.angle, std::make_pair<float, float>(55, 125));
-
-            // Устаналиваем скорость движения модели
-	   //  engine.speed = system.normal_speed.get();
-
-//            // Обновляем параметры движения модели
-//	    system.engine.write(engine);
         }
 
-	//printf("Total: %f\n", engine.distance);
-
-            // Устаналиваем скорость движения модели
+        // Устаналиваем скорость движения модели
+        if(start) {
             engine.speed = system.normal_speed.get();
+            start = false;
+        }
 
         // Получаем распознанный знак
         SignData sign_handle = system.sign.get();
@@ -55,24 +51,22 @@ void* LoopFnc(void* ptr) {
             }else{
                 if(holding_step[step].hold_start) {
                     if(holding_step[step].hold_by_time) holding_step[step].hold_timer.start();
-                    else holding_step[step].start_distance = engine.distance;
-		    //printf("Start distance: %f\n", holding_step[step].start_distance);                    
+                    else holding_step[step].start_distance = engine.distance;               
                     holding_step[step].hold_start = false;
                 }
 
                 // Останаливаем таймер
 			    if(holding_step[step].hold_by_time) holding_step[step].hold_timer.stop();
-		//printf("%f\n", engine.distance);
                 // Если прошло время удерживания скорости
                 // или проехали расстояние в течение которого удерживаем скорость
 			    if ((holding_step[step].hold_by_time && holding_step[step].hold_timer.millis() >= holding_step[step].hold_for) ||
                    (!holding_step[step].hold_by_time && (engine.distance - holding_step[step].start_distance) >= holding_step[step].hold_for)) {
                     if((holding_step.size() - 1) > step) step++;
                     else{
-			//printf("ENDD\n");
                         step = 0;
                         hold = false;
                         holding_step.clear();
+                        engine.speed = system.normal_speed.get();
                     }
 			    }
                 // Если ещё нужно удерживать скорость
@@ -93,6 +87,7 @@ void* LoopFnc(void* ptr) {
                         tr_timer.start();                                        
 			            tr_timer_started = true;  
                     }
+                    engine.speed = 0;
                     break;
                 }
                 // Если увидели зелёный сигнал светофора
@@ -102,7 +97,7 @@ void* LoopFnc(void* ptr) {
 				    engine.speed = system.normal_speed.get();   
                     hold = true;
                     holding_step.push_back(
-                        Hold(false, 50, system.normal_speed.get()));
+                        Hold(true, 100, system.normal_speed.get()));
                     tr_timer_started = false;
                     break;
                 }
@@ -110,16 +105,12 @@ void* LoopFnc(void* ptr) {
                 case stop_s:
                 {
                     hold = true;
-
-		    //printf("play audio\n");
 		
                     // Для того, чтобы доехать до знака
                     holding_step.push_back(
                         Hold(false, sign_handle.distance, system.normal_speed.get()));
-
-		    //printf("ggggggggggggggggggg: %d\n", sign_handle.distance);
-		    holding_step.push_back(
-			Hold(true, 2000, 0));
+                    holding_step.push_back(
+                        Hold(true, 2000, 0));
 
                     // Воспроизводим файл с оповещением о знаке стоп
                     system.play_audio("../audio/stop.wav");
@@ -150,8 +141,6 @@ void* LoopFnc(void* ptr) {
                 {
                     hold = true;
 
-			//printf("Distance: %d\n", sign_handle.distance);
-			//printf("Size: %ld\n", holding_step.size());
                     // Для того, чтобы доехать до знака
                     holding_step.push_back(
                         Hold(false, sign_handle.distance, system.normal_speed.get()));
@@ -186,8 +175,9 @@ void* LoopFnc(void* ptr) {
 			    }
 		    }
         }
-            // Обновляем параметры движения модели
-            system.engine.write(engine);
+        
+        // Обновляем параметры движения модели
+        system.engine.write(engine);
 
         // Задержка для работы регулятора
         usleep(10000);

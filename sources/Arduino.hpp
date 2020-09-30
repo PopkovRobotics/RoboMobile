@@ -11,11 +11,15 @@
 #include "Config.hpp"
 #include "LogInfo.hpp"
 
-// Тип получаемой информации с Arduino
-enum ArduinoData {
-	NoneA = 0,					// Неизвестный тип информации
-	Distance,               	// Пройденное расстояние в см
-  	BattaryLOW,                 // Батарея разряжена
+struct ArduinoData {
+    double distance;
+    bool charge_bat;
+    
+    // Конструктор класса
+    ArduinoData(double distance = 0.0, bool charge_bat = true) {
+        this->distance = distance;
+        this->charge_bat = charge_bat;
+    }
 };
 
 // Класс ArduinoCtrl реализует "общения" с Arduino
@@ -39,12 +43,8 @@ public:
  	 * size - параметр типа size_t, размер отправляемого сообщения.
  	 */
 	void SendCommand(const char* message, size_t size);
-	/*
- 	 * Функция получает информацию с Arduino и возвращает 
- 	 * тип информации.
- 	 * data - универсальная ссылка на информацию, содержащиеся в полученном сообщение.
- 	 */
-	ArduinoData Feedback(double& data);
+    // Функция получает информацию с Arduino и возвращает ее.
+	ArduinoData Feedback();
 	// Функция для очищения буфера общения с Arduino
 	void Clean();
 	// Функция для закрытия соеденения с Arduino

@@ -98,8 +98,11 @@ void RecognitionLine(Mat& frame, LineInfo& line, int scan_row) {
 	}
 
 	if(line.center != -1) {
-		if(line.max_difference < line.width || line.max_difference == 0)
+		if(line.max_difference < line.width || line.max_difference == 0) {
 			line.max_difference = line.width;
+			line.x_2 = border_right;
+			line.y_2 = scan_row;
+		}
 	}
 
 	line.old_center = line.center;
@@ -130,7 +133,8 @@ void* RecognitionLineFnc(void* ptr) {
 												// должна двигаться модель на развилке
 												// (true - направо, false - налево).
 		rescan_line = true,
-		crossing_line = false;					// Флаг, определяющий есть ли перед моделью пересечение двух чёрных линий
+		crossing_line = false,					// Флаг, определяющий есть ли перед моделью пересечение двух чёрных линий
+		green_tr_found = false;
 
 	while (!system.program_end.get()) {
         // Получаем изображение с камеры
@@ -149,7 +153,7 @@ void* RecognitionLineFnc(void* ptr) {
 
 		if(rescan_line) RecognitionLine(frame, main_line, scan_row);
 
-		for(int k = 0; k <= 60; k+=5) {
+		for(int k = 0; k <= 100; k+=5) {
         	RecognitionLine(frame, 					// Изображение, на котором введётся распознавание чёрной линии
 							lines, 					// Структура, в которую будет записываться информация о чёрной линии
 							SCAN_ROW - k);			// Номер строки на изображение, на которой введётся распознавание чёрной линии
@@ -168,6 +172,8 @@ void* RecognitionLineFnc(void* ptr) {
 				scan_row = 420;
 			}else if(!direction) rescan_line = false;
 		}else if(road_type != Unknown && (engine.distance - fork_start) > road_distance) {
+			if(road_type == CrossRoad) green_tr_found = false;
+
 			// Размер перекрёстка в см.
 			road_distance = 0;
 			// Тип дороги
@@ -188,9 +194,11 @@ void* RecognitionLineFnc(void* ptr) {
 		}
 
 		// Для определения стоп линии
-		if(lines.max_difference > 150 && !crossing_line) {
+		if(lines.max_difference > 150 && !green_tr_found) {
 			// Флаг, определяющий наличие стоп линии перед машинкой
 			main_line.stop_line = true;
+			main_line.x_2 = lines.x_2;
+			main_line.y_2 = lines.y_2;
 		}else{
 			// Флаг, определяющий наличие стоп линии перед машинкой
 			main_line.stop_line = false;
@@ -200,6 +208,8 @@ void* RecognitionLineFnc(void* ptr) {
 		if(sign.sign == left_s || sign.sign == top_s || sign.sign == right_s) {
 			sign_handle = (Sign)sign.sign;
 		}
+
+		if(sign.sign == tr_green_s) green_tr_found = true; 
 
 		if(main_line.old_width != 0 && main_line.width != 0) {
 			// Пересечение двух линий на центральном переркёстке
@@ -213,7 +223,7 @@ void* RecognitionLineFnc(void* ptr) {
 				continue;
 			}
 			// Центральный перекрёсток
-			else if(main_line.width > 150 && road_type == Unknown) {
+			else if(main_line.width > 140 &&  (main_line.width - main_line.old_width) > 25 && road_type == Unknown) {
                 INFO("Crossroad detected.");
 				// Номер строки на изображение, на котором введётся распознавание чёрной линии
 				scan_row = 420;
@@ -228,15 +238,14 @@ void* RecognitionLineFnc(void* ptr) {
 				continue;
 			}
 			// Развилка
-			else if(main_line.width > 70 && road_type == Unknown) {
+			else if(main_line.width > 70 && (main_line.width - main_line.old_width) > 15 && road_type == Unknown) {
                 INFO("Fork detected.");
 				// Тип дороги
 				road_type = Fork;
 				// Размер перекрёстка в см.
 				road_distance = FORK_SIZE;
 				// Направление движения на перекрёстке
-				direction = (sign_handle == left_s ? false : true);
-            
+				direction = ((sign_handle == left_s || sign_handle == top_s) ? false : true);
 				rescan_line = false;
 
 				fork_start = engine.distance;
@@ -249,12 +258,12 @@ void* RecognitionLineFnc(void* ptr) {
 			int white_points = 0;
 			// Если двигаемся по перекрёстку направо
 			if(direction) {
-				main_line.set_point = 340;
+				main_line.set_point = 320;
 				for(int i = main_line.center; i <= 637; i+=3) {
 					white_points = 0;
 					for (int j = 0; j < 3; ++j) {
 						std::vector<uint8_t> pixel = frame.at<uint8_t>(Point(i + j, scan_row));
-						white_points += int(pixel[2] > 40);
+						white_points += int(pixel[2] > 70);
 					}
                     if(white_points > 2) {
 						main_line.center = i + 1;

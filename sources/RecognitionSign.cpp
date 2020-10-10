@@ -1,5 +1,10 @@
 #include "RecognitionSign.hpp"
 
+#define PRINT_SIGN(x, y, z)             \
+    if(x != y) {                        \
+        INFO(z);                        \
+    }
+
 // Функции
 /*
  * Функция возвращает расстояние от чёрной линии до вебкамеры модели.
@@ -242,10 +247,10 @@ void* RecognitionSignFnc(void* ptr) {
 	}
 
     // Область интереса, в которой распознаём светофоры
-    Rect trlight_rect(470,                          // Координата x верхнего левого угла
+    Rect trlight_rect(440,                          // Координата x верхнего левого угла
                     205,                            // Координата y верхнего левого угла
-                    170,                            // Ширина области интереса
-                    170);                           // Высота области интереса
+                    200,                            // Ширина области интереса
+                    140);                           // Высота области интереса
 
     while(!system.program_end.get()) {
         robo_timer.start();
@@ -274,8 +279,8 @@ void* RecognitionSignFnc(void* ptr) {
 					    border_right = line_scan[i];
 			    }
 		    }
-            // Если ширина зелёной стойки больше 55 пикселей, то продолжаем распознавание знака
-		    if(count_green >= 55){
+        // Если ширина зелёной стойки больше 55 пикселей, то продолжаем распознавание знака
+		if(count_green >= 55){
 
                 // Находим координаты верхнего края зелёной стойки
                 Point center_rect((border_right.x + border_left.x) / 2, (border_right.y + border_left.y) / 2), 
@@ -304,24 +309,24 @@ void* RecognitionSignFnc(void* ptr) {
                         id = i;
                     }
                 }
-
+                SignData old_recognition = system.sign.get();
                 rects[id].x += rect_sign.x;
                 rects[id].y += rect_sign.y;
                 Rect sign_clarify = rects[id];
                 Mat sign_roi = frame(rects[id]);
                 std::vector<float> colors = getPercent(sign_roi);
-                /*
+		        /*
                  * colors[0] - доля пикселей красного цвета,
                  * colors[1] - доля пикселей жёлтого цвета,
                  * colors[2] - доля пикселей синего цвета,
                  * colors[3] - доля пикселей чёрного цвета.
                  */
                 // Знаки жёлтого и красного цвета
-                if(colors[3] < (float)0.05 && colors[2] < (float)0.05) {
+                if(colors[3] < (float)0.15 && colors[2] < (float)0.15) {
                     // Знак стоп
-                    if(colors[0] > (float)0.45 && colors[1] < (float)0.05) {
+                    if(colors[0] > (float)0.45 && colors[1] < (float)0.20) {
                         sign_detect.sign = stop_s;
-			            INFO("Sign Stop recognized.");
+                        PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Sign Stop recognized.");
                         sign_detect.distance = signDistance(sign_clarify.width);
                         sign_detect.area = sign_clarify;
                     }
@@ -329,7 +334,7 @@ void* RecognitionSignFnc(void* ptr) {
                     // Знак главная дорога
                     else if(colors[0] < (float)0.1 && colors[1] > (float)0.1){
                         sign_detect.sign = mainroad_s;
-			            INFO("Sign Main Road recognized.");
+                        PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Sign Main Road recognized.");
                         sign_detect.distance = signDistance(sign_clarify.width);
                         sign_detect.area = sign_clarify;
                     }
@@ -361,7 +366,7 @@ void* RecognitionSignFnc(void* ptr) {
                     // Знак парковки
                     if(all_count < 60) {
                         sign_detect.sign = parking_s;
-			            INFO("Sign Parking recognized.");
+                        PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Sign Parking recognized.");
                         sign_detect.distance = signDistance(sign_clarify.width);
                         sign_detect.area = sign_clarify;
                     }else{
@@ -403,21 +408,21 @@ void* RecognitionSignFnc(void* ptr) {
                         // Стрелка налево
                         if((float)(count_center + count_right) * (float)0.7 < count_left) {
                             sign_detect.sign = right_s;
-				            INFO("Left turn sign recognized.");
+                            PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Left turn sign recognized.");
                             sign_detect.distance = signDistance(sign_clarify.width);
                             sign_detect.area = sign_clarify;
                         }
                         // Стрелка направо
                         else if((float)(count_center + count_left) * (float)0.7 < count_right) {
                             sign_detect.sign = left_s;
-				            INFO("Right turn sign recognized.");
+                            PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Right turn sign recognized.");
                             sign_detect.distance = signDistance(sign_clarify.width);
                             sign_detect.area = sign_clarify;
                         }
                         // Стрелка прямо
                         else if((float)(count_left + count_right) * (float)0.7 < count_center) {
                             sign_detect.sign = top_s;
-				            INFO("Traffic sign straight recognized.");
+                            PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Traffic sign straight recognized.");
                             sign_detect.distance = signDistance(sign_clarify.width);
                             sign_detect.area = sign_clarify;
                         }
@@ -434,64 +439,99 @@ void* RecognitionSignFnc(void* ptr) {
         LineInfo line_info = system.line.get();
         // Если перед моделью находится стоп-линия
         if(line_info.stop_line) {
-            std::vector<Rect> rects = findRects(frame, trlight_rect, Point(20, 60), 50);
+		    // Область, в которой находится светофор
+            Rect tr_roi;
+            // tr_roi.y - координата y, верхнего левого края светофора
+            // tr_roi.x - координата x, верхнего левого края светофора
+            // tr_roi.height - высота светофора в пикселях
+            // tr_roi.width - ширин светофора в пикселях
 
-            if(rects.size() > 0) {
-                for(uint16_t i  = 0; i < rects.size(); i++){
-                    float dl = (float)rects[i].width / (float)rects[i].height;
-                    if(dl > (float)0.3 && dl < (float)0.7) {
-                        rects[i].x += trlight_rect.x;
-               	 		rects[i].y += trlight_rect.y;
-                        uint32_t black_points = 0;
-                        for(uint32_t y = 0; y < rects[i].height; y++) {
-                            for(uint32_t x = 0; x < rects[i].width; x++) {
-                                std::vector<uint8_t> pixel = frame.at<uint8_t>(Point(rects[i].x + x, rects[i].y + y));
-                                if(pixel[2] <= 60 && pixel[1] <= 60 && pixel[0] <= 60)
-                                    black_points++;
-                            }
-                        }
-                        float black_p = (float)black_points / (float)(rects[i].width * rects[i].height);
-                        if(black_p >= (float)0.8) {
-                            const int column = rects[i].width * 0.5;
-                            int32_t whitePixelsCount = 0,                            // количество белых пикселей
-                            whitePixelsOffset = 0;                                  // сумма порядковых номеров белых пикселей
-                            for (int32_t offset = 0; offset < rects[i].height; offset++) {
-                                std::vector<uint8_t> pixel = frame.at<uint8_t>(Point((column + rects[i].x), (offset + rects[i].y)));
-                                uint16_t sum_c = (pixel[2] + pixel[1] + pixel[0]);
-                                if (sum_c >= 130) {
-                                    whitePixelsCount++;
-                                    whitePixelsOffset += offset;
-                                }
-                			}
-                            if(whitePixelsCount <= 2) continue;
-                            float whitePixelsCenter = whitePixelsOffset / whitePixelsCount;
-                            float lightPosition = whitePixelsCenter / rects[i].height;
-                            // Переменная lightPosition, определяет положение зажжённого сигнала 
-                            // светофора (0.7 - зеленый, 0,46 желтый, 0.34 - красножелтый, 0.23 - красный)
+            // Находим нижнюю y координату светофора
 
-                            // Зелёный сигнал светофора
-                            if(lightPosition >= 0.6) {
-                                INFO("Green traffic light recognized.");
-                                sign_detect.area = rects[i];
-                                sign_detect.sign = tr_green_s; 
-                            }
-                            // Жёлтый сигнал светофора
-                            else if(lightPosition >= 0.4) {
-                                INFO("Yellow traffic light recognized."); 
-                                sign_detect.area = rects[i];
-                                sign_detect.sign = tr_yellow_s; 
-                            }
-                            // Красный сигнал светофора
-                            else if(lightPosition >= 0.1) {
-                                INFO("Red traffic light recognized.");
-                                sign_detect.area = rects[i];
-                                sign_detect.sign = tr_red_s; 
-                            }
+            // Предпологаем, на какой высоте примерно находиться светофор
+			tr_roi.height =  line_info.y_2 - 30;
 
-                        }
+            // Проходимся по изображению вверх, пока не найдём чёрный пиксель
+			for(; tr_roi.height > 0; tr_roi.height--) {
+                // Если нашли чёрный пиксель
+				if(frame.color(Point(line_info.x_2 + 60, tr_roi.height), BGR) == Black) break; }
+
+            // Проверяем на какой высоте находится нижний края светофора
+            // Если координата слишком маленькая, то это значит, что светофор не найден
+			if(tr_roi.height > 240) {
+
+                // Ищем края чёрной бленды светофора
+
+                // Находим координату x левого края бленды светофора
+			    tr_roi.x = line_info.x_2 + 60;
+                tr_roi.width = tr_roi.x;
+			    for(; tr_roi.x > 0; tr_roi.x--) {
+                    // Если нашли белый пиксель
+                    if(frame.color(Point(tr_roi.x, tr_roi.height - 5), BGR) == White) break; }
+
+                // Находим координату x правого края бленды светофора
+			    for(; tr_roi.width < 640; tr_roi.width++) {
+                    // Если нашли белый пиксель
+                    if(frame.color(Point(tr_roi.width, tr_roi.height - 5), BGR) == White) break; }
+		
+                // Находим координату y верхнего края бленды
+			    tr_roi.y = tr_roi.height - 5;
+			    for(; tr_roi.y > 0; tr_roi.y--) {
+                    // Если нашли белый пиксель
+                    if(frame.color(Point(tr_roi.width - 5, tr_roi.y), BGR) == White) break; }
+
+                // Рассчитывем ширину и высоту бленды светофора в пикселях
+                // Для нахождения ширины из координаты х правого края вычитаем координату x левого края
+                // А для нахождения высоты из координаты y нижнего края вычитаем координату y верхнего края
+                tr_roi.width -= tr_roi.x;
+                tr_roi.height -= tr_roi.y;
+
+                // ********* ОПРЕДЕЛЯЕМ СИГНАЛ СВЕТОФОРА *********
+                // Сигнал светофора определяется по положению, то есть цвет сигнала не учитывается.
+
+                const int column = tr_roi.width * 0.5;
+                // Количество белых пикселей
+                int32_t white_pixels = 0,
+                // Сумма порядковых номеров белых пикселей
+                        white_pixels_offset = 0; 
+                for (int32_t offset = 0; offset < tr_roi.height; offset++) {
+                    std::vector<uint8_t> pixel = frame.at<uint8_t>(Point(tr_roi.x + column, tr_roi.y + offset));
+                    if ((pixel[2] + pixel[1] + pixel[0]) >= 130) {
+                        white_pixels++;
+                        white_pixels_offset += offset;
                     }
                 }
-            }
+
+                // Если количество белых пикселей в строке меньше 10, то
+                // останаливаем определения сигнала светофора
+                if(white_pixels <= 10) continue;
+                // Координата y, зажжённого сигнала
+                float signal_center = white_pixels_offset / white_pixels,
+                    light_position = signal_center / tr_roi.height;
+                // Переменная lightPosition, определяет положение зажжённого сигнала 
+                // светофора (0.7 - зеленый, 0.46 желтый, 0.34 - красножелтый, 0.23 - красный)
+
+                SignData old_recognition = system.sign.get();
+
+                // Зелёный сигнал светофора
+                if(light_position >= 0.6) {
+                    sign_detect.sign = tr_green_s; 
+                    PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Green traffic light recognized.");
+                    sign_detect.area = tr_roi;
+                }
+                // Жёлтый сигнал светофора
+                else if(light_position >= 0.4) {
+                    sign_detect.sign = tr_yellow_s; 
+                    PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Yellow traffic light recognized.");
+                    sign_detect.area = tr_roi;
+                }
+                // Красный сигнал светофора
+                else if(light_position >= 0.1) {
+                    sign_detect.sign = tr_red_s; 
+                    PRINT_SIGN(sign_detect.sign, old_recognition.sign, "Red traffic light recognized.");
+                    sign_detect.area = tr_roi;
+                }
+		    }
         }
 
         robo_timer.stop();
@@ -508,7 +548,7 @@ void* RecognitionSignFnc(void* ptr) {
             SignData cur_sign = system.sign.get();
             if(cur_sign.sign != none_s) {
                 cur_sign.detect_time += spend_time;
-                if(cur_sign.detect_time >= 3) {
+                if(cur_sign.detect_time >= 30) {
                     system.sign.write(SignData());
                 }else{
                     system.sign.write(cur_sign);

@@ -43,7 +43,9 @@ public:
  	 * size - параметр типа size_t, размер отправляемого сообщения.
  	 */
 	void SendCommand(const char* message, size_t size);
-    // Функция получает информацию с Arduino и возвращает ее.
+	/*
+ 	 * Функция получает информацию с Arduino и возвращает её.
+ 	 */
 	ArduinoData Feedback();
 	// Функция для очищения буфера общения с Arduino
 	void Clean();

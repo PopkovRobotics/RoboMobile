@@ -27,6 +27,8 @@ ArduinoCtrl::ArduinoCtrl(System& system) {
 	tcgetattr(arduino_fd, &options);	
 	// Скорость отправки/чтения данных (115200 бод)							
 	cfsetispeed(&options, B115200);
+	cfsetospeed(&options, B115200);
+
 	options.c_cflag &= ~PARENB;
 	options.c_cflag &= ~CSTOPB;
 	options.c_cflag &= ~CSIZE;
@@ -65,17 +67,19 @@ void ArduinoCtrl::SendCommand(const char* message, size_t size) {
 	ioctl(arduino_fd, TCSBRK, 1);
 	return;
 }
-// Функция получает информацию с Arduino и возвращает ее.
+/*
+ * Функция получает информацию с Arduino и возвращает её.
+ */
 ArduinoData ArduinoCtrl::Feedback() {
 	ArduinoData arduino_data;
 	char char_status;
     while(true) {
-        char_status = 0;
+		char_status = 0;
         int bytes = read(arduino_fd, &char_status, 1);
-        
+
         if(bytes > 0) {
-            switch(char_status) {
-                // Получаем пройденное расстояние с Arduino
+			switch(char_status) {
+               	// Получаем пройденное расстояние с Arduino
                 case 'F':
                 {
                     // Пример сообщения о дитсанции, которое Arduino отправляет:
@@ -87,15 +91,15 @@ ArduinoData ArduinoCtrl::Feedback() {
                     bool end_read = false;
                     for(; !end_read; i++){
                         bytes = read(arduino_fd, &char_status, 1);
-                        		
                         // Если пришёл символ, закрывающий чтение дистанции, то выходим из цикла
                         if(bytes > 0 && char_status == 'E') end_read = true;
                         else if(bytes > 0) buffer[i] = char_status;
-                        else if (bytes <= 0) end_read = true;
+						else if (bytes <= 0) end_read = true;
                     }
-                    
                     buffer[i + 1] = '\0';
+
                     double distance = std::atof(buffer);
+
                     if(distance > arduino_data.distance) arduino_data.distance = distance;
                     break;
                 }
@@ -173,10 +177,11 @@ void* ArduinoFnc(void* ptr) {
 		// Получаем информацию с Arduino
 		ArduinoData arduino_data = controller.Feedback();
 
-		if(arduino_data.distance > 0.0)
-            engine.distance = arduino_data.distance;
-		
-		// Записываем пройденное расстояние в глобальную структуру
+		if(arduino_data.distance > 0.0) {
+			engine.distance = arduino_data.distance;
+		}
+
+		// Обновляем дистанцию в структуре
         system.engine.write(engine);
 		// Задержка для отправки/приёма данных на/c Arduino в микросекундах
 		usleep(10000);

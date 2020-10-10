@@ -61,12 +61,6 @@ int main() {
 	pthread_t ServerThr;
 	pthread_create(&ServerThr, NULL, ServerFnc, &system);
 
-  //pthread_t WriterThr;
-  //bool video_flag = system.video_params.get().write_video;
-  //if(video_flag) {
-  //	  pthread_create(&WriterThr, NULL, VideoWriter, &system);
-  //}
-
   while(true) {
     if(program_end) {
       system.program_end.write(true);
@@ -79,12 +73,7 @@ int main() {
   pthread_join(RecognitionLineThr, NULL);
   pthread_join(RecognitionSignThr, NULL);
   pthread_join(LoopThr, NULL);
-  //if(video_flag) {
-  //	  pthread_join(WriterThr, NULL);
-  //}
   pthread_join(ArduinoThr, NULL);
   pthread_detach(ServerThr);
-  //pthread_join(CaptureThr, NULL);
-  //pthread_join(ServerThr, NULL);
   return 0;
 }

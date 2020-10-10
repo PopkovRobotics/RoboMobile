@@ -35,9 +35,9 @@ void* LoopFnc(void* ptr) {
 
         // Устаналиваем скорость движения модели
         if(start) {
-            engine.speed = system.normal_speed.get();
-            start = false;
-        }
+		    engine.speed = system.normal_speed.get();
+		    start = false;
+	    }
 
         // Получаем распознанный знак
         SignData sign_handle = system.sign.get();
@@ -51,7 +51,7 @@ void* LoopFnc(void* ptr) {
             }else{
                 if(holding_step[step].hold_start) {
                     if(holding_step[step].hold_by_time) holding_step[step].hold_timer.start();
-                    else holding_step[step].start_distance = engine.distance;               
+                    else holding_step[step].start_distance = engine.distance;
                     holding_step[step].hold_start = false;
                 }
 
@@ -61,12 +61,12 @@ void* LoopFnc(void* ptr) {
                 // или проехали расстояние в течение которого удерживаем скорость
 			    if ((holding_step[step].hold_by_time && holding_step[step].hold_timer.millis() >= holding_step[step].hold_for) ||
                    (!holding_step[step].hold_by_time && (engine.distance - holding_step[step].start_distance) >= holding_step[step].hold_for)) {
-                    if((holding_step.size() - 1) > step) step++;
+			        if((holding_step.size() - 1) > step) step++;
                     else{
                         step = 0;
                         hold = false;
                         holding_step.clear();
-                        engine.speed = system.normal_speed.get();
+			            engine.speed = system.normal_speed.get();
                     }
 			    }
                 // Если ещё нужно удерживать скорость
@@ -87,7 +87,7 @@ void* LoopFnc(void* ptr) {
                         tr_timer.start();                                        
 			            tr_timer_started = true;  
                     }
-                    engine.speed = 0;
+		            engine.speed = 0;
                     break;
                 }
                 // Если увидели зелёный сигнал светофора
@@ -105,12 +105,13 @@ void* LoopFnc(void* ptr) {
                 case stop_s:
                 {
                     hold = true;
-		
+
                     // Для того, чтобы доехать до знака
                     holding_step.push_back(
                         Hold(false, sign_handle.distance, system.normal_speed.get()));
-                    holding_step.push_back(
-                        Hold(true, 2000, 0));
+
+		            holding_step.push_back(
+			            Hold(true, 2000, 0));
 
                     // Воспроизводим файл с оповещением о знаке стоп
                     system.play_audio("../audio/stop.wav");
@@ -175,7 +176,6 @@ void* LoopFnc(void* ptr) {
 			    }
 		    }
         }
-        
         // Обновляем параметры движения модели
         system.engine.write(engine);
 

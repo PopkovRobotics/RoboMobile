@@ -241,11 +241,11 @@ Color Mat::color(Point point, ColorType type_color) {
             float i = (float)red / (float)green,
 		        j = (float)green / (float)blue;
 	        float value = i / j;
-
-            if(green > 80 && (float)green > ((float)(red + blue) * (float)1.1)) color = Green;
+		//printf("%d %d %d\n", red, green, blue);
+            if(green > 80 && (float)green > ((float)(red + blue) * (float)0.7)) color = Green;
             else if (red > 60 && red > ((float)(green + blue) * (float)0.7) && (red - green) > 30) color = Red;
             else if(red > 90 && abs(red - green) < 30 && blue <= 70) color = Yellow;
-	        else if ((blue - (red + green)) > 10) color = Blue;
+	        else if ((float)blue >= ((float)(red + green) * (float)0.7)) color = Blue;
 	        else if (blue <= 60 && green <= 60 && red <= 60) color = Black;
             else if (red > 60 && (value > (float)0.7 && value < (float)1.3)) color = White;
             

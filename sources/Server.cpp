@@ -120,7 +120,7 @@ void* ServerFnc(void *ptr) {
     INFO("Server thread was starting.");
     System &system = *((System *)ptr);
     // Создаём экземпляр класса для работы с сервером
-	Server server(system);
+    Server server(system);
     // Создаём экземпляр класса для хранения кадра с вебкамеры
     Mat frame;
 	while(!system.program_end.get()) {
@@ -158,6 +158,7 @@ void* ServerFnc(void *ptr) {
         		server.sendCmd(Engine_t,                                                 // Тип команды (Отправляем изображение с вебкамеры)
                     (uint32_t)sizeof(Engine),                                            // Размер изображения в байтах
                     (void *)(&engine));                                                  // Информация о движение модели
+	
 	}
 
 	printf("Server thread is stoped.");

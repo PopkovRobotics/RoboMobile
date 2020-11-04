@@ -1,0 +1,9 @@
+# Log files
+*.log
+
+# Video files
+*.avi
+*.mp4
+
+# Build folder
+/build/ 
